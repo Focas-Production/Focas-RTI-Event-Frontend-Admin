@@ -181,23 +181,23 @@ export default function VerifyPage() {
   const showScanner = !result && !processing;
 
   return (
-    <div style={{ padding: '20px 16px', maxWidth: 600, margin: '0 auto' }}>
+    <div style={{ padding: '12px', maxWidth: 600, margin: '0 auto' }}>
 
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: 0 }}>Attendance Verification</h1>
-        <p  style={{ fontSize: 12, color: '#94a3b8', margin: '3px 0 0' }}>Scan QR code or search manually</p>
+      <div style={{ marginBottom: 10 }}>
+        <h1 style={{ fontSize: 18, fontWeight: 900, color: '#0f172a', margin: 0 }}>Attendance Verification</h1>
+        <p  style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0' }}>Scan QR code or search manually</p>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
         <button onClick={() => switchMain('qr')}     style={mainBtn(mainTab === 'qr')}>📷 QR Scanner</button>
         <button onClick={() => switchMain('manual')} style={mainBtn(mainTab === 'manual')}>🔍 Manual Lookup</button>
       </div>
 
       {/* ── QR section ─────────────────────────────────────────────── */}
       {mainTab === 'qr' && (
-        <div style={card}>
+        <div style={{ ...card, padding: '12px' }}>
           {/* Sub-tabs */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
             <button onClick={() => switchQr('camera')} style={subBtn(qrTab === 'camera')}>📸 Camera</button>
             <button onClick={() => switchQr('upload')} style={subBtn(qrTab === 'upload')}>🖼️ Upload Image</button>
           </div>
@@ -226,16 +226,18 @@ export default function VerifyPage() {
           {/* Video element always stays in DOM; only the wrapper hides   */}
           <div style={{ display: qrTab === 'camera' && showScanner ? 'block' : 'none' }}>
 
-            {/* Viewport — square for maximum size on mobile */}
+            {/* Viewport — fills available screen height, button always visible */}
             <div style={{
               position:       'relative',
               width:          '100%',
-              aspectRatio:    '1 / 1',
+              height:         'calc(100svh - 380px)',
+              minHeight:      200,
+              maxHeight:      320,
               background:     '#111',
               borderRadius:   18,
               overflow:       'hidden',
               border:         cameraOn ? `3px solid ${GREEN}` : '2px solid #e2e8f0',
-              marginBottom:   14,
+              marginBottom:   10,
               display:        'flex',
               alignItems:     'center',
               justifyContent: 'center',
@@ -296,18 +298,18 @@ export default function VerifyPage() {
             {/* Camera controls */}
             {!cameraOn ? (
               <button onClick={startCamera}
-                style={{ width: '100%', padding: '15px', borderRadius: 14, fontSize: 16, fontWeight: 900, cursor: 'pointer', background: GREEN, color: '#fff', border: 'none' }}>
+                style={{ width: '100%', padding: '13px', borderRadius: 12, fontSize: 15, fontWeight: 900, cursor: 'pointer', background: GREEN, color: '#fff', border: 'none' }}>
                 📷 Start Camera
               </button>
             ) : (
               <button onClick={stopCamera}
-                style={{ width: '100%', padding: '14px', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>
+                style={{ width: '100%', padding: '11px', borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fca5a5' }}>
                 ⏹ Stop Camera
               </button>
             )}
 
             {cameraError && (
-              <div style={{ marginTop: 12, background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
+              <div style={{ marginTop: 8, background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
                 ⚠️ {cameraError}
               </div>
             )}
