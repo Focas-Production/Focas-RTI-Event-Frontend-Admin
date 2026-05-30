@@ -1,0 +1,238 @@
+import { useState } from 'react';
+import { api } from '../lib/api.js';
+
+const GREEN = '#1D9E75';
+
+const INIT = { name: '', phone: '', email: '', appliedForSep: '', appliedForRTI: '', groupSelection: [] };
+
+export default function RegisterPage() {
+  const [form,    setForm]    = useState(INIT);
+  const [status,  setStatus]  = useState('idle'); // idle | loading | success
+  const [error,   setError]   = useState('');
+  const [created, setCreated] = useState(null);
+
+  const toggleGroup = (g) =>
+    setForm(f => ({
+      ...f,
+      groupSelection: f.groupSelection.includes(g)
+        ? f.groupSelection.filter(x => x !== g)
+        : [...f.groupSelection, g],
+    }));
+
+  const price = form.groupSelection.length === 2 ? '₹1,499' : '₹799';
+
+  const submit = async () => {
+    setError('');
+    if (!form.name.trim())             return setError('Full name is required.');
+    if (!form.phone.trim())            return setError('Phone number is required.');
+    if (!form.email.trim())            return setError('Email is required.');
+    if (!form.appliedForSep)           return setError('Please answer the Sep 2026 question.');
+    if (!form.appliedForRTI)           return setError('Please answer the RTI question.');
+    if (!form.groupSelection.length)   return setError('Please select at least one group.');
+
+    const payload = {
+      name:           form.name.trim(),
+      phone:          form.phone.trim(),
+      email:          form.email.trim(),
+      appliedForSep:  form.appliedForSep,
+      appliedForRTI:  form.appliedForRTI,
+      groupSelection: form.groupSelection.length === 2 ? 'Both Group' : form.groupSelection[0],
+    };
+
+    setStatus('loading');
+    try {
+      const res  = await api.post('/api/attendees/manual-register', payload);
+      const data = await res.json();
+      if (res.ok && data.success) { setCreated(data.attendee); setStatus('success'); }
+      else { setError(data.message || 'Registration failed.'); setStatus('idle'); }
+    } catch (_) {
+      setError('Network error — check backend connection.'); setStatus('idle');
+    }
+  };
+
+  const reset = () => { setForm(INIT); setStatus('idle'); setError(''); setCreated(null); };
+
+  /* ── styles ────────────────────────────────────────────────────── */
+  const card  = { background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 16, padding: '28px 28px' };
+  const input = {
+    width: '100%', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '11px 14px',
+    fontSize: 14, outline: 'none', color: '#374151', boxSizing: 'border-box',
+    transition: 'border-color .15s',
+  };
+  const label = { fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 7, display: 'block' };
+  const field = { display: 'flex', flexDirection: 'column', gap: 0 };
+
+  const toggleBtn = (active) => ({
+    flex: 1, padding: '10px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+    border: active ? `2px solid ${GREEN}` : '2px solid #e2e8f0',
+    background: active ? '#f0fdf4' : '#fff',
+    color: active ? GREEN : '#64748b', transition: 'all .15s',
+  });
+
+  /* ── Success view ─────────────────────────────────────────────── */
+  if (status === 'success' && created) {
+    return (
+      <div style={{ padding: '24px 20px', maxWidth: 520, margin: '0 auto' }}>
+        <div style={{ marginBottom: 20 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', margin: 0 }}>Manual Registration</h1>
+          <p  style={{ fontSize: 12, color: '#94a3b8', margin: '3px 0 0' }}>Admin — direct entry with payment pre-confirmed</p>
+        </div>
+        <div style={card}>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <div style={{ fontSize: 56, marginBottom: 10 }}>🎉</div>
+            <h2 style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: '0 0 6px' }}>Registered Successfully!</h2>
+            <p  style={{ fontSize: 13, color: '#64748b', margin: 0 }}>QR generated. Email &amp; WhatsApp confirmation sent.</p>
+          </div>
+
+          {/* Attendee card */}
+          <div style={{ background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 14, padding: '18px 20px', marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a' }}>{created.name}</div>
+                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>{created.phone}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8' }}>{created.email}</div>
+              </div>
+              <span style={{ background: '#dcfce7', color: '#15803d', padding: '4px 12px', borderRadius: 99, fontSize: 12, fontWeight: 700 }}>
+                ✓ paid
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+              {[
+                { v: created.groupSelection, bg: '#ede9fe', color: '#6d28d9' },
+                { v: `₹${((created.amount || 0) / 100).toLocaleString('en-IN')}`, bg: '#f1f5f9', color: '#374151' },
+                { v: `Sep: ${created.appliedForSep}`, bg: '#f0fdf4', color: '#166534' },
+                { v: `RTI: ${created.appliedForRTI}`, bg: '#f0fdf4', color: '#166534' },
+              ].map(({ v, bg, color }) => (
+                <span key={v} style={{ background: bg, color, padding: '4px 12px', borderRadius: 99, fontSize: 12, fontWeight: 700 }}>{v}</span>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={reset}
+            style={{ width: '100%', padding: '13px', borderRadius: 12, fontSize: 14, fontWeight: 900, cursor: 'pointer', background: GREEN, color: '#fff', border: 'none' }}
+          >
+            + Register Another Student
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Form view ────────────────────────────────────────────────── */
+  return (
+    <div style={{ padding: '24px 20px', maxWidth: 520, margin: '0 auto' }}>
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', margin: 0 }}>Manual Registration</h1>
+        <p  style={{ fontSize: 12, color: '#94a3b8', margin: '3px 0 0' }}>Admin — direct entry with payment pre-confirmed</p>
+      </div>
+
+      <div style={card}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+          {/* Name */}
+          <div style={field}>
+            <label style={label}>Full Name *</label>
+            <input
+              style={input} type="text" placeholder="e.g. Priya Sharma"
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              onFocus={e => e.target.style.borderColor = GREEN}
+              onBlur={e  => e.target.style.borderColor = '#e2e8f0'}
+            />
+          </div>
+
+          {/* Phone */}
+          <div style={field}>
+            <label style={label}>WhatsApp Number *</label>
+            <input
+              style={input} type="tel" placeholder="+91 98765 43210"
+              value={form.phone}
+              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+              onFocus={e => e.target.style.borderColor = GREEN}
+              onBlur={e  => e.target.style.borderColor = '#e2e8f0'}
+            />
+          </div>
+
+          {/* Email */}
+          <div style={field}>
+            <label style={label}>Email ID *</label>
+            <input
+              style={input} type="email" placeholder="student@example.com"
+              value={form.email}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+              onFocus={e => e.target.style.borderColor = GREEN}
+              onBlur={e  => e.target.style.borderColor = '#e2e8f0'}
+            />
+          </div>
+
+          {/* Applied for Sep */}
+          <div style={field}>
+            <label style={label}>Applied for CA Inter Sep 2026? *</label>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {['Yes', 'Not yet'].map(opt => (
+                <button key={opt} type="button" onClick={() => setForm(f => ({ ...f, appliedForSep: opt }))}
+                  style={toggleBtn(form.appliedForSep === opt)}>
+                  {form.appliedForSep === opt ? '✓ ' : ''}{opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Applied for RTI */}
+          <div style={field}>
+            <label style={label}>Applied for RTI? *</label>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {['Yes', 'Not yet'].map(opt => (
+                <button key={opt} type="button" onClick={() => setForm(f => ({ ...f, appliedForRTI: opt }))}
+                  style={toggleBtn(form.appliedForRTI === opt)}>
+                  {form.appliedForRTI === opt ? '✓ ' : ''}{opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Group selection */}
+          <div style={field}>
+            <label style={label}>Groups Applying For *</label>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {['Group 1', 'Group 2'].map(g => (
+                <button key={g} type="button" onClick={() => toggleGroup(g)}
+                  style={toggleBtn(form.groupSelection.includes(g))}>
+                  {form.groupSelection.includes(g) ? '✓ ' : ''}{g}
+                </button>
+              ))}
+            </div>
+            {form.groupSelection.length > 0 && (
+              <div style={{ marginTop: 8, textAlign: 'center', fontSize: 12, color: '#64748b' }}>
+                {form.groupSelection.length === 2 ? 'Both groups' : form.groupSelection[0]}
+                {' — '}
+                <strong style={{ color: GREEN }}>{price}</strong>
+              </div>
+            )}
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 10, padding: '11px 14px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          {/* Submit */}
+          <button
+            onClick={submit}
+            disabled={status === 'loading'}
+            style={{ width: '100%', padding: '14px', borderRadius: 12, fontSize: 15, fontWeight: 900, cursor: status === 'loading' ? 'not-allowed' : 'pointer', background: GREEN, color: '#fff', border: 'none', opacity: status === 'loading' ? 0.75 : 1, transition: 'opacity .15s' }}
+          >
+            {status === 'loading' ? 'Registering…' : `Register Student — ${price}`}
+          </button>
+
+          <p style={{ textAlign: 'center', fontSize: 12, color: '#94a3b8', margin: 0 }}>
+            Payment is marked as paid immediately. QR, email &amp; WhatsApp sent automatically.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
