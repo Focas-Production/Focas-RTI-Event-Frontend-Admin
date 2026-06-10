@@ -170,7 +170,7 @@ export default function RegisterPage() {
           <div style={field}>
             <label style={label}>Applied for CA Inter Sep 2026? *</label>
             <div style={{ display: 'flex', gap: 10 }}>
-              {['Yes', 'Not yet'].map(opt => (
+              {['Yes', 'No'].map(opt => (
                 <button key={opt} type="button" onClick={() => setForm(f => ({ ...f, appliedForSep: opt }))}
                   style={toggleBtn(form.appliedForSep === opt)}>
                   {form.appliedForSep === opt ? '✓ ' : ''}{opt}

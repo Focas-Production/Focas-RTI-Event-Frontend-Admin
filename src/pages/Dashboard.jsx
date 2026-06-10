@@ -26,6 +26,7 @@ const BADGE_MAP = {
   'Both Group': { bg: '#fef9c3', color: '#92400e' },
   'Yes':        { bg: '#dcfce7', color: '#15803d' },
   'Not yet':    { bg: '#fef3c7', color: '#92400e' },
+  'No':         { bg: '#fee2e2', color: '#b91c1c' },
 };
 
 function Badge({ value }) {
@@ -167,7 +168,7 @@ export default function Dashboard() {
           <SEL value={filters.appliedForSep} onChange={e => setF('appliedForSep', e.target.value)}>
             <option value="">Sep Applied?</option>
             <option value="Yes">Yes</option>
-            <option value="Not yet">Not yet</option>
+            <option value="No">No</option>
           </SEL>
           <SEL value={filters.appliedForRTI} onChange={e => setF('appliedForRTI', e.target.value)}>
             <option value="">RTI Applied?</option>
