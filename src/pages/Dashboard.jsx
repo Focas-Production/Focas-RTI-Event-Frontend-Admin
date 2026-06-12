@@ -48,7 +48,7 @@ const SEL = (props) => (
   />
 );
 
-const EMPTY = { q: '', paymentStatus: '', attended: '', groupSelection: '', appliedForSep: '', appliedForRTI: '' };
+const EMPTY = { q: '', paymentStatus: '', attended: '', groupSelection: '', appliedForSep: '', appliedForRTI: '', isrtiUrl: '' };
 
 export default function Dashboard() {
   const [stats,     setStats]     = useState({});
@@ -78,6 +78,7 @@ export default function Dashboard() {
     if (f.groupSelection)  q.set('groupSelection', f.groupSelection);
     if (f.appliedForSep)   q.set('appliedForSep', f.appliedForSep);
     if (f.appliedForRTI)   q.set('appliedForRTI', f.appliedForRTI);
+    if (f.isrtiUrl !== '')  q.set('isrtiUrl', f.isrtiUrl);
     try {
       const d = await api.get(`/api/attendees/search?${q}`).then(r => r.json());
       if (d.success) { setRows(d.attendees); setTotal(d.total); setPages(d.pages || 1); setPage(p); }
@@ -175,6 +176,11 @@ export default function Dashboard() {
             <option value="Yes">Yes</option>
             <option value="Not yet">Not yet</option>
           </SEL>
+          <SEL value={filters.isrtiUrl} onChange={e => setF('isrtiUrl', e.target.value)}>
+            <option value="">RTI Link?</option>
+            <option value="true">Has Link</option>
+            <option value="false">No Link</option>
+          </SEL>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           <button onClick={apply} style={btn(GREEN)}>Apply Filters</button>
@@ -195,17 +201,17 @@ export default function Dashboard() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
-                {['#','Name','Phone','Email','Sep?','RTI?','Group','Amount','Payment','Attended','Scan Time','Action'].map(h => (
+                {['#','Name','Phone','Email','Sep?','RTI?','Group','Amount','Payment','Attended','Scan Time','RTI Link','Action'].map(h => (
                   <th key={h} style={th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={12} style={{ ...td, textAlign: 'center', padding: 56, color: '#94a3b8' }}>Loading…</td></tr>
+                <tr><td colSpan={13} style={{ ...td, textAlign: 'center', padding: 56, color: '#94a3b8' }}>Loading…</td></tr>
               )}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={12} style={{ ...td, textAlign: 'center', padding: 56, color: '#94a3b8' }}>No registrations found.</td></tr>
+                <tr><td colSpan={13} style={{ ...td, textAlign: 'center', padding: 56, color: '#94a3b8' }}>No registrations found.</td></tr>
               )}
               {!loading && rows.map((a, i) => (
                 <tr
@@ -228,6 +234,18 @@ export default function Dashboard() {
                   <td style={td}><Badge value={String(a.attended)} /></td>
                   <td style={{ ...td, color: '#94a3b8', fontSize: 12, whiteSpace: 'nowrap' }}>
                     {a.scanTime ? new Date(a.scanTime).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                  </td>
+                  <td style={td}>
+                    {a.isrtiUrl && a.rtiUrl
+                      ? <a
+                          href={a.rtiUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: 'inline-block', background: '#eef2ff', color: '#4338ca', border: '1.5px solid #c7d2fe', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}
+                        >
+                          🔗 RTI Link
+                        </a>
+                      : <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>}
                   </td>
                   <td style={td}>
                     {a.paymentStatus === 'paid' && !a.attended && (
