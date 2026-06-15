@@ -238,7 +238,10 @@ export default function Dashboard() {
                   <td style={td}>
                     {a.isrtiUrl && a.rtiUrl
                       ? <a
-                          href={a.rtiUrl}
+                         href={(() => {
+  try { new URL(a.rtiUrl); return a.rtiUrl; }
+  catch { return '//' + a.rtiUrl; }
+})()}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ display: 'inline-block', background: '#eef2ff', color: '#4338ca', border: '1.5px solid #c7d2fe', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}
