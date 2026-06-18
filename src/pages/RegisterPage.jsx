@@ -24,7 +24,7 @@ export default function RegisterPage() {
   const submit = async () => {
     setError('');
     if (!form.name.trim())             return setError('Full name is required.');
-    if (!form.phone.trim())            return setError('Phone number is required.');
+    if (form.phone.length !== 10)      return setError('Enter a valid 10-digit phone number.');
     if (!form.email.trim())            return setError('Email is required.');
     if (!form.appliedForSep)           return setError('Please answer the Sep 2026 question.');
     if (!form.appliedForRTI)           return setError('Please answer the RTI question.');
@@ -32,7 +32,7 @@ export default function RegisterPage() {
 
     const payload = {
       name:           form.name.trim(),
-      phone:          form.phone.trim(),
+      phone:          `+91${form.phone}`,
       email:          form.email.trim(),
       appliedForSep:  form.appliedForSep,
       appliedForRTI:  form.appliedForRTI,
@@ -145,13 +145,23 @@ export default function RegisterPage() {
           {/* Phone */}
           <div style={field}>
             <label style={label}>WhatsApp Number *</label>
-            <input
-              style={input} type="tel" placeholder="+91 98765 43210"
-              value={form.phone}
-              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-              onFocus={e => e.target.style.borderColor = GREEN}
-              onBlur={e  => e.target.style.borderColor = '#e2e8f0'}
-            />
+            <div style={{ display: 'flex', alignItems: 'stretch' }}>
+              <span style={{
+                display: 'flex', alignItems: 'center', padding: '11px 14px',
+                border: '1.5px solid #e2e8f0', borderRight: 'none',
+                borderRadius: '10px 0 0 10px', background: '#f8fafc',
+                fontSize: 14, fontWeight: 700, color: '#374151', whiteSpace: 'nowrap',
+              }}>+91</span>
+              <input
+                style={{ ...input, borderRadius: '0 10px 10px 0' }}
+                type="tel" inputMode="numeric" maxLength={10}
+                placeholder="98765 43210"
+                value={form.phone}
+                onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                onFocus={e => e.target.style.borderColor = GREEN}
+                onBlur={e  => e.target.style.borderColor = '#e2e8f0'}
+              />
+            </div>
           </div>
 
           {/* Email */}

@@ -48,6 +48,40 @@ const SEL = (props) => (
   />
 );
 
+/* ── RTI link grouping (matches Attendee schema) ───────────────── */
+const RTI_GROUPS = [
+  { key: 'group1RtiUrl', label: 'Group 1', subjects: [
+    ['advancedAccounting', 'Advanced Accounting'],
+    ['corporateLaw',       'Corporate Law'],
+    ['incomeTaxLaw',       'Income Tax Law'],
+    ['gst',                'GST'],
+  ] },
+  { key: 'group2RtiUrl', label: 'Group 2', subjects: [
+    ['costandManagementAccounting', 'Cost & Management Accounting'],
+    ['auditingEthics',              'Auditing & Ethics'],
+    ['fm',                          'FM'],
+    ['sm',                          'SM'],
+  ] },
+];
+
+const normalizeHref = (u) => {
+  try { new URL(u); return u; }
+  catch { return '//' + u; }
+};
+
+// Flatten an attendee's RTI links into [{ group, subject, url }].
+const collectRtiLinks = (a) => {
+  const out = [];
+  for (const g of RTI_GROUPS) {
+    const obj = a[g.key] || {};
+    for (const [field, label] of g.subjects) {
+      const arr = Array.isArray(obj[field]) ? obj[field] : [];
+      arr.filter(Boolean).forEach(url => out.push({ group: g.label, subject: label, url }));
+    }
+  }
+  return out;
+};
+
 const EMPTY = { q: '', paymentStatus: '', attended: '', groupSelection: '', appliedForSep: '', appliedForRTI: '', isrtiUrl: '' };
 
 export default function Dashboard() {
@@ -60,6 +94,7 @@ export default function Dashboard() {
   const [error,     setError]     = useState('');
   const [filters,   setFilters]   = useState(EMPTY);
   const [inputQ,    setInputQ]    = useState('');
+  const [linksModal, setLinksModal] = useState(null); // { name, links } for the RTI links popup
 
   /* ── data fetchers ─────────────────────────────────────────────── */
   const fetchStats = async () => {
@@ -236,19 +271,17 @@ export default function Dashboard() {
                     {a.scanTime ? new Date(a.scanTime).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
                   </td>
                   <td style={td}>
-                    {a.isrtiUrl && a.rtiUrl
-                      ? <a
-                         href={(() => {
-  try { new URL(a.rtiUrl); return a.rtiUrl; }
-  catch { return '//' + a.rtiUrl; }
-})()}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ display: 'inline-block', background: '#eef2ff', color: '#4338ca', border: '1.5px solid #c7d2fe', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}
-                        >
-                          🔗 RTI Link
-                        </a>
-                      : <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>}
+                    {(() => {
+                      const links = collectRtiLinks(a);
+                      return links.length
+                        ? <button
+                            onClick={() => setLinksModal({ name: a.name, links })}
+                            style={{ background: '#eef2ff', color: '#4338ca', border: '1.5px solid #c7d2fe', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >
+                            🔗 RTI Links ({links.length})
+                          </button>
+                        : <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>;
+                    })()}
                   </td>
                   <td style={td}>
                     {a.paymentStatus === 'paid' && !a.attended && (
@@ -291,6 +324,59 @@ export default function Dashboard() {
               {page} / {pages}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* ── RTI links popup ─────────────────────────────────────────── */}
+      {linksModal && (
+        <RtiLinksModal data={linksModal} onClose={() => setLinksModal(null)} />
+      )}
+    </div>
+  );
+}
+
+/* ── RTI links popup ─────────────────────────────────────────────── */
+function RtiLinksModal({ data, onClose }) {
+  // Group the flat link list by group label for display.
+  const byGroup = {};
+  data.links.forEach(l => { (byGroup[l.group] ||= []).push(l); });
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 110 }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ background: '#fff', borderRadius: 16, width: 500, maxWidth: '92vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 22px', borderBottom: '1.5px solid #e2e8f0' }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a' }}>RTI Links</div>
+            <div style={{ fontSize: 12, color: '#94a3b8' }}>{data.name}</div>
+          </div>
+          <button onClick={onClose} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 17, fontWeight: 700, color: '#64748b', cursor: 'pointer' }}>×</button>
+        </div>
+
+        <div style={{ padding: '12px 22px 18px', overflowY: 'auto' }}>
+          {Object.entries(byGroup).map(([group, links]) => (
+            <div key={group} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#1D9E75', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '8px 0 4px' }}>{group}</div>
+              {links.map((l, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '9px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>{l.subject}</span>
+                  <a
+                    href={normalizeHref(l.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ background: '#eef2ff', color: '#4338ca', border: '1.5px solid #c7d2fe', borderRadius: 7, padding: '5px 11px', fontSize: 12, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
+                  >
+                    🔗 Open
+                  </a>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     </div>
