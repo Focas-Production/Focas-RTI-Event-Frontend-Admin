@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import Dashboard    from './pages/Dashboard';
 import VerifyPage   from './pages/VerifyPage';
 import RegisterPage from './pages/RegisterPage';
+import LeadsPage    from './pages/LeadsPage';
 
 const GREEN = '#1D9E75';
 const DARK  = '#0f172a';
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: '▦'  },
+  { id: 'leads',     label: 'Leads',     icon: '☎'  },
   { id: 'verify',    label: 'Verify',    icon: '✓'  },
   { id: 'register',  label: 'Register',  icon: '+'  },
 ];
@@ -22,7 +24,10 @@ export default function App() {
     return () => window.removeEventListener('resize', handler);
   }, []);
 
-  const Page = tab === 'dashboard' ? Dashboard : tab === 'verify' ? VerifyPage : RegisterPage;
+  const Page = tab === 'dashboard' ? Dashboard
+             : tab === 'leads'     ? LeadsPage
+             : tab === 'verify'    ? VerifyPage
+             : RegisterPage;
 
   /* ── shared nav item styles ──────────────────────────────────── */
   const sideItem = (id) => ({
