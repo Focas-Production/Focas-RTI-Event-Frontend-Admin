@@ -17,6 +17,13 @@ export const api = {
       headers: BASE_HEADERS,
       body:    JSON.stringify(body),
     }),
+
+  patch: (path, body) =>
+    fetch(`${BACKEND}${path}`, {
+      method:  'PATCH',
+      headers: BASE_HEADERS,
+      body:    JSON.stringify(body),
+    }),
 };
 
 export { BACKEND };
