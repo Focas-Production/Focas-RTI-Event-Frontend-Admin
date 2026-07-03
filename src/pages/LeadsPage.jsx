@@ -50,6 +50,8 @@ export default function LeadsPage() {
   const [filters, setFilters] = useState(EMPTY);
   const [inputQ,  setInputQ]  = useState('');
   const [editing, setEditing] = useState(null); // lead being edited in the modal
+  const [exporting, setExporting] = useState(false);
+  const [limit,   setLimit]   = useState(50);    // rows per page
 
   const fmtDateTime = (d) => d ? new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
@@ -61,9 +63,9 @@ export default function LeadsPage() {
     setRows(prev => prev.map(r => r._id === id ? { ...r, status: d.lead.status, notes: d.lead.notes } : r));
   };
 
-  const fetchRows = async (p = 1, f = filters) => {
+  const fetchRows = async (p = 1, f = filters, lim = limit) => {
     setLoading(true); setError('');
-    const q = new URLSearchParams({ page: p, limit: 50 });
+    const q = new URLSearchParams({ page: p, limit: lim });
     if (f.q)         q.set('q', f.q);
     if (f.status)    q.set('status', f.status);
     if (f.startDate) q.set('startDate', f.startDate);
@@ -77,6 +79,58 @@ export default function LeadsPage() {
   };
 
   useEffect(() => { fetchRows(1, EMPTY); }, []);
+
+  /* ── export all leads to CSV (frontend-only) ───────────────────── */
+  const csvEscape = (v) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const all = [];
+      let p = 1, totalPages = 1;
+      do {
+        const q = new URLSearchParams({ page: p, limit: 3000 });
+        const d = await api.get(`/api/rti/leads?${q}`).then(r => r.json());
+        if (!d.success) throw new Error('Backend returned an error');
+        all.push(...(d.leads || []));
+        totalPages = d.pages || 1;
+        p++;
+      } while (p <= totalPages);
+
+      const headers = ['#', 'Phone', 'Source', 'Campaign', 'Page', 'Status', 'Notes', 'Captured At'];
+      const lines = [headers.join(',')];
+      all.forEach((l, i) => {
+        lines.push([
+          i + 1,
+          l.phone,
+          l.source,
+          l.campaign,
+          l.page,
+          l.status || 'PENDING',
+          l.notes || '',
+          l.createdAt ? new Date(l.createdAt).toLocaleString('en-IN') : '',
+        ].map(csvEscape).join(','));
+      });
+
+      const csv  = '﻿' + lines.join('\r\n'); // BOM so Excel reads UTF-8
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `campaign-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Export failed: ' + (e.message || 'unknown error'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const apply = () => { const f = { ...filters, q: inputQ }; setFilters(f); fetchRows(1, f); };
   const clear = () => { setInputQ(''); setFilters(EMPTY); fetchRows(1, EMPTY); };
@@ -100,7 +154,16 @@ export default function LeadsPage() {
           <h1 style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', margin: 0 }}>Campaign Leads</h1>
           <p  style={{ fontSize: 12, color: '#94a3b8', margin: '3px 0 0' }}>Visitors tracked from campaign links</p>
         </div>
-        <button onClick={() => fetchRows(page, filters)} style={btn(GREEN)}>↻ Refresh</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            onClick={exportCsv}
+            disabled={exporting}
+            style={{ ...btn('#2563eb'), cursor: exporting ? 'not-allowed' : 'pointer', opacity: exporting ? 0.7 : 1 }}
+          >
+            {exporting ? 'Exporting…' : '⤓ Export CSV'}
+          </button>
+          <button onClick={() => fetchRows(page, filters)} style={btn(GREEN)}>↻ Refresh</button>
+        </div>
       </div>
 
       {/* ── Filter bar ──────────────────────────────────────────────── */}
@@ -164,7 +227,7 @@ export default function LeadsPage() {
                   onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                   onMouseLeave={e => e.currentTarget.style.background = '#fff'}
                 >
-                  <td style={{ ...td, color: '#94a3b8', fontSize: 12 }}>{(page - 1) * 50 + i + 1}</td>
+                  <td style={{ ...td, color: '#94a3b8', fontSize: 12 }}>{(page - 1) * limit + i + 1}</td>
                   <td style={{ ...td, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>{l.phone}</td>
                   <td style={td}><Badge value={l.source} /></td>
                   <td style={{ ...td, color: '#475569', whiteSpace: 'nowrap' }}>{l.campaign || '—'}</td>
@@ -205,8 +268,17 @@ export default function LeadsPage() {
 
         {/* Pagination */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: '1.5px solid #f1f5f9', flexWrap: 'wrap', gap: 8 }}>
-          <span style={{ fontSize: 12, color: '#94a3b8' }}>
+          <span style={{ fontSize: 12, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 8 }}>
             Showing <strong style={{ color: '#475569' }}>{rows.length}</strong> of <strong style={{ color: '#475569' }}>{total}</strong> leads
+            <select
+              value={limit}
+              onChange={e => { const lim = Number(e.target.value); setLimit(lim); fetchRows(1, filters, lim); }}
+              style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 12, padding: '5px 8px', background: '#fff', color: '#374151', cursor: 'pointer', outline: 'none' }}
+            >
+              {[50, 100, 250, 500, 1000, 2000, 3000].map(n => (
+                <option key={n} value={n}>{n} / page</option>
+              ))}
+            </select>
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {[

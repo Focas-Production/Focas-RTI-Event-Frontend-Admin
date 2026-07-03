@@ -95,6 +95,8 @@ export default function Dashboard() {
   const [filters,   setFilters]   = useState(EMPTY);
   const [inputQ,    setInputQ]    = useState('');
   const [linksModal, setLinksModal] = useState(null); // { name, links } for the RTI links popup
+  const [exporting, setExporting] = useState(false);
+  const [limit,     setLimit]     = useState(20);      // rows per page
 
   /* ── data fetchers ─────────────────────────────────────────────── */
   const fetchStats = async () => {
@@ -104,9 +106,9 @@ export default function Dashboard() {
     } catch (_) {}
   };
 
-  const fetchRows = async (p = 1, f = filters) => {
+  const fetchRows = async (p = 1, f = filters, lim = limit) => {
     setLoading(true); setError('');
-    const q = new URLSearchParams({ page: p, limit: 20 });
+    const q = new URLSearchParams({ page: p, limit: lim });
     if (f.q)               q.set('q', f.q);
     if (f.paymentStatus)   q.set('paymentStatus', f.paymentStatus);
     if (f.attended !== '') q.set('attended', f.attended);
@@ -123,6 +125,70 @@ export default function Dashboard() {
   };
 
   useEffect(() => { fetchStats(); fetchRows(1, EMPTY); }, []);
+
+  /* ── export all registrations to CSV (frontend-only) ───────────── */
+  const csvEscape = (v) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      // Pull every registration by paging through the search endpoint (no filters).
+      const all = [];
+      let p = 1, totalPages = 1;
+      do {
+        const q = new URLSearchParams({ page: p, limit: 100 });
+        const d = await api.get(`/api/attendees/search?${q}`).then(r => r.json());
+        if (!d.success) throw new Error('Backend returned an error');
+        all.push(...(d.attendees || []));
+        totalPages = d.pages || 1;
+        p++;
+      } while (p <= totalPages);
+
+      const headers = ['#', 'Name', 'Phone', 'Email', 'Applied Sep', 'Applied RTI', 'Group',
+                       'Amount (₹)', 'Payment', 'Attended', 'Scan Time', 'RTI Links',
+                       'Order ID', 'Payment ID', 'Registered At'];
+      const lines = [headers.join(',')];
+
+      all.forEach((a, i) => {
+        const links = collectRtiLinks(a).map(l => `${l.group}/${l.subject}: ${l.url}`).join(' | ');
+        lines.push([
+          i + 1,
+          a.name,
+          a.phone,
+          a.email,
+          a.appliedForSep,
+          a.appliedForRTI,
+          a.groupSelection,
+          ((a.amount || 0) / 100),
+          a.paymentStatus,
+          a.attended ? 'Yes' : 'No',
+          a.scanTime ? new Date(a.scanTime).toLocaleString('en-IN') : '',
+          links,
+          a.razorpayOrderId || '',
+          a.razorpayPaymentId || '',
+          a.createdAt ? new Date(a.createdAt).toLocaleString('en-IN') : '',
+        ].map(csvEscape).join(','));
+      });
+
+      const csv  = '﻿' + lines.join('\r\n'); // BOM so Excel reads UTF-8 (₹, etc.)
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `rti-registrations-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Export failed: ' + (e.message || 'unknown error'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const apply = () => { const f = { ...filters, q: inputQ }; setFilters(f); fetchRows(1, f); fetchStats(); };
   const clear = () => { setInputQ(''); setFilters(EMPTY); fetchRows(1, EMPTY); fetchStats(); };
@@ -160,9 +226,18 @@ export default function Dashboard() {
           <h1 style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', margin: 0 }}>Registrations</h1>
           <p  style={{ fontSize: 12, color: '#94a3b8', margin: '3px 0 0' }}>RTI Day 2026 — live attendance tracking</p>
         </div>
-        <button onClick={() => { fetchStats(); fetchRows(page, filters); }} style={btn(GREEN)}>
-          ↻ Refresh
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            onClick={exportCsv}
+            disabled={exporting}
+            style={{ ...btn('#2563eb'), cursor: exporting ? 'not-allowed' : 'pointer', opacity: exporting ? 0.7 : 1 }}
+          >
+            {exporting ? 'Exporting…' : '⤓ Export CSV'}
+          </button>
+          <button onClick={() => { fetchStats(); fetchRows(page, filters); }} style={btn(GREEN)}>
+            ↻ Refresh
+          </button>
+        </div>
       </div>
 
       {/* ── Stat cards ──────────────────────────────────────────────── */}
@@ -255,7 +330,7 @@ export default function Dashboard() {
                   onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                   onMouseLeave={e => e.currentTarget.style.background = '#fff'}
                 >
-                  <td style={{ ...td, color: '#94a3b8', fontSize: 12 }}>{(page - 1) * 20 + i + 1}</td>
+                  <td style={{ ...td, color: '#94a3b8', fontSize: 12 }}>{(page - 1) * limit + i + 1}</td>
                   <td style={{ ...td, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>{a.name}</td>
                   <td style={{ ...td, color: '#475569', whiteSpace: 'nowrap' }}>{a.phone}</td>
                   <td style={{ ...td, color: '#64748b', fontSize: 12, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.email}</td>
@@ -303,8 +378,17 @@ export default function Dashboard() {
 
         {/* Pagination */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: '1.5px solid #f1f5f9', flexWrap: 'wrap', gap: 8 }}>
-          <span style={{ fontSize: 12, color: '#94a3b8' }}>
+          <span style={{ fontSize: 12, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 8 }}>
             Showing <strong style={{ color: '#475569' }}>{rows.length}</strong> of <strong style={{ color: '#475569' }}>{total}</strong> registrations
+            <select
+              value={limit}
+              onChange={e => { const lim = Number(e.target.value); setLimit(lim); fetchRows(1, filters, lim); }}
+              style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 12, padding: '5px 8px', background: '#fff', color: '#374151', cursor: 'pointer', outline: 'none' }}
+            >
+              {[20, 100, 250, 500, 1000, 2000, 3000].map(n => (
+                <option key={n} value={n}>{n} / page</option>
+              ))}
+            </select>
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {[
