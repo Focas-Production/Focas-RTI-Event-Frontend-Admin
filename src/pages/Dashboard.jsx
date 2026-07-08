@@ -148,7 +148,8 @@ export default function Dashboard() {
       } while (p <= totalPages);
 
       const headers = ['#', 'Name', 'Phone', 'Email', 'Applied Sep', 'Applied RTI', 'Group',
-                       'Amount (₹)', 'Payment', 'Attended', 'Scan Time', 'RTI Links',
+                       'Amount Paid (₹)', 'MRP (₹)', 'Discount (₹)', 'Coupon',
+                       'Payment', 'Source', 'Campaign', 'Attended', 'Scan Time', 'RTI Links',
                        'Order ID', 'Payment ID', 'Registered At'];
       const lines = [headers.join(',')];
 
@@ -163,7 +164,12 @@ export default function Dashboard() {
           a.appliedForRTI,
           a.groupSelection,
           ((a.amount || 0) / 100),
+          ((a.originalAmount || a.amount || 0) / 100),
+          ((a.discountAmount || 0) / 100),
+          a.couponCode || '',
           a.paymentStatus,
+          a.source || '',
+          a.campaign || '',
           a.attended ? 'Yes' : 'No',
           a.scanTime ? new Date(a.scanTime).toLocaleString('en-IN') : '',
           links,
@@ -311,17 +317,17 @@ export default function Dashboard() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
-                {['#','Name','Phone','Email','Sep?','RTI?','Group','Amount','Payment','Attended','Scan Time','RTI Link','Action'].map(h => (
+                {['#','Name','Phone','Email','Sep?','RTI?','Group','Amount','Coupon','Payment','Source','Attended','Scan Time','RTI Link','Action'].map(h => (
                   <th key={h} style={th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={13} style={{ ...td, textAlign: 'center', padding: 56, color: '#94a3b8' }}>Loading…</td></tr>
+                <tr><td colSpan={15} style={{ ...td, textAlign: 'center', padding: 56, color: '#94a3b8' }}>Loading…</td></tr>
               )}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={13} style={{ ...td, textAlign: 'center', padding: 56, color: '#94a3b8' }}>No registrations found.</td></tr>
+                <tr><td colSpan={15} style={{ ...td, textAlign: 'center', padding: 56, color: '#94a3b8' }}>No registrations found.</td></tr>
               )}
               {!loading && rows.map((a, i) => (
                 <tr
@@ -339,8 +345,28 @@ export default function Dashboard() {
                   <td style={td}><Badge value={a.groupSelection} /></td>
                   <td style={{ ...td, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>
                     ₹{((a.amount || 0) / 100).toLocaleString('en-IN')}
+                    {a.discountAmount > 0 && (
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textDecoration: 'line-through' }}>
+                        ₹{((a.originalAmount || 0) / 100).toLocaleString('en-IN')}
+                      </div>
+                    )}
+                  </td>
+                  <td style={td}>
+                    {a.couponCode ? (
+                      <div style={{ whiteSpace: 'nowrap' }}>
+                        <span style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800, letterSpacing: 0.3 }}>
+                          {a.couponCode}
+                        </span>
+                        <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 700, marginTop: 3 }}>
+                          −₹{((a.discountAmount || 0) / 100).toLocaleString('en-IN')}
+                        </div>
+                      </div>
+                    ) : (
+                      <span style={{ color: '#cbd5e1', fontSize: 12 }}>—</span>
+                    )}
                   </td>
                   <td style={td}><Badge value={a.paymentStatus} /></td>
+                  <td style={{ ...td, color: '#475569', whiteSpace: 'nowrap', textTransform: 'capitalize' }}>{a.source || 'direct'}</td>
                   <td style={td}><Badge value={String(a.attended)} /></td>
                   <td style={{ ...td, color: '#94a3b8', fontSize: 12, whiteSpace: 'nowrap' }}>
                     {a.scanTime ? new Date(a.scanTime).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
