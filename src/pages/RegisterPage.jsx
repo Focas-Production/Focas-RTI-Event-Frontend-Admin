@@ -19,7 +19,8 @@ export default function RegisterPage() {
         : [...f.groupSelection, g],
     }));
 
-  const price = form.groupSelection.length === 2 ? '₹1,499' : '₹799';
+  // Keep in sync with backend PRICES in controllers/attendeeController.js
+  const price = form.groupSelection.length === 2 ? '₹999' : '₹499';
 
   const submit = async () => {
     setError('');
