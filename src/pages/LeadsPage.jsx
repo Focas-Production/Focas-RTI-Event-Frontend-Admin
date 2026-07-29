@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api.js';
+import CopyButton from '../components/CopyButton.jsx';
 
 const GREEN = '#1D9E75';
 
@@ -228,7 +229,12 @@ export default function LeadsPage() {
                   onMouseLeave={e => e.currentTarget.style.background = '#fff'}
                 >
                   <td style={{ ...td, color: '#94a3b8', fontSize: 12 }}>{(page - 1) * limit + i + 1}</td>
-                  <td style={{ ...td, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>{l.phone}</td>
+                  <td style={{ ...td, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      {l.phone}
+                      <CopyButton value={l.phone} size={14} />
+                    </span>
+                  </td>
                   <td style={td}><Badge value={l.source} /></td>
                   <td style={{ ...td, color: '#475569', whiteSpace: 'nowrap' }}>{l.campaign || '—'}</td>
                   <td style={td}>
@@ -342,7 +348,10 @@ function LeadEditModal({ lead, onClose, onSave }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 22px', borderBottom: '1.5px solid #e2e8f0' }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a' }}>Edit Notes</div>
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>{lead.phone}</div>
+            <div style={{ fontSize: 12, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>
+              {lead.phone}
+              <CopyButton value={lead.phone} size={13} />
+            </div>
           </div>
           <button onClick={onClose} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 17, fontWeight: 700, color: '#64748b', cursor: 'pointer' }}>×</button>
         </div>

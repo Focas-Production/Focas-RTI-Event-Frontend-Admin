@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api.js';
+import CopyButton from '../components/CopyButton.jsx';
 
 const GREEN = '#1D9E75';
 
@@ -177,6 +178,7 @@ export default function CouponLeadsPage() {
                 <a href={telLink(l.phone)} style={{ color: '#0f172a', fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>
                   📞 {l.phone}
                 </a>
+                <CopyButton value={l.phone} size={15} />
                 <a href={waLink(l.phone)} target="_blank" rel="noreferrer" style={{ color: '#15803d', fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>
                   💬 WhatsApp
                 </a>
@@ -221,6 +223,7 @@ export default function CouponLeadsPage() {
                         <a href={telLink(l.phone)} title="Call — open dialer" style={{ color: '#0f172a', fontWeight: 700, textDecoration: 'none' }}>
                           📞 {l.phone}
                         </a>
+                        <CopyButton value={l.phone} size={14} />
                         <a href={waLink(l.phone)} target="_blank" rel="noreferrer" title="Open in WhatsApp" style={{ textDecoration: 'none', fontSize: 15 }}>
                           💬
                         </a>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api.js';
+import CopyButton from '../components/CopyButton.jsx';
 
 const GREEN = '#1D9E75';
 
@@ -338,7 +339,12 @@ export default function Dashboard() {
                 >
                   <td style={{ ...td, color: '#94a3b8', fontSize: 12 }}>{(page - 1) * limit + i + 1}</td>
                   <td style={{ ...td, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>{a.name}</td>
-                  <td style={{ ...td, color: '#475569', whiteSpace: 'nowrap' }}>{a.phone}</td>
+                  <td style={{ ...td, color: '#475569', whiteSpace: 'nowrap' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      {a.phone}
+                      <CopyButton value={a.phone} size={14} />
+                    </span>
+                  </td>
                   <td style={{ ...td, color: '#64748b', fontSize: 12, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.email}</td>
                   <td style={td}><Badge value={a.appliedForSep} /></td>
                   <td style={td}><Badge value={a.appliedForRTI} /></td>
