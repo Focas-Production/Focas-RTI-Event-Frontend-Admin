@@ -118,7 +118,7 @@ export default function CouponLeadsPage() {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontSize: mobile ? 19 : 22, fontWeight: 900, color: '#0f172a', margin: 0 }}>Coupon Requests</h1>
-          <p  style={{ fontSize: 12, color: '#94a3b8', margin: '3px 0 0' }}>Contacts who clicked “Get Coupon” on WhatsApp</p>
+          <p  style={{ fontSize: 12, color: '#94a3b8', margin: '3px 0 0' }}>Contacts who clicked “Get Coupon” on WhatsApp — duplicates merged, paid registrations hidden</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: mobile ? '100%' : 'auto' }}>
           <button
