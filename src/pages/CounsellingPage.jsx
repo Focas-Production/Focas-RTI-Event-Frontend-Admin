@@ -42,6 +42,7 @@ export default function CounsellingPage() {
   }, []);
 
   const fmtDateTime = (d) => d ? new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+  const fmtDate     = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
   const waLink  = (p) => `https://wa.me/${String(p).replace(/\D/g, '')}`;
   const telLink = (p) => `tel:+${String(p).replace(/\D/g, '')}`;
 
@@ -92,6 +93,19 @@ export default function CounsellingPage() {
     if (v !== null) patchLead(l._id, { notes: v });
   };
 
+  const editSlotDate = (l) => {
+    const current = l.counsellingDate ? new Date(l.counsellingDate).toISOString().slice(0, 10) : '';
+    const v = window.prompt('Counselling date (YYYY-MM-DD):', current);
+    if (v === null) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v.trim())) { alert('Please enter the date as YYYY-MM-DD'); return; }
+    patchLead(l._id, { counsellingDate: v.trim() });
+  };
+
+  const editSlotWindow = (l) => {
+    const v = window.prompt('Slot window (e.g. "10:00 AM - 12:00 PM"):', l.slotWindow || '');
+    if (v !== null) patchLead(l._id, { slotWindow: v });
+  };
+
   /* ── export to CSV (backend caps limit at 100/page) ────────────── */
   const csvEscape = (v) => {
     const s = v == null ? '' : String(v);
@@ -112,12 +126,14 @@ export default function CounsellingPage() {
       } while (p <= totalPages);
 
       const headers = ['#', 'Name', 'Phone', 'CA Level', 'Route', 'Last Exam', 'Student Type', 'Attempt',
-                       'Slot Status', 'Slot Time', 'Notes', 'Source', 'Campaign', 'Submissions', 'Registered'];
+                       'Slot Date', 'Slot Window', 'Slot Status', 'Slot Time', 'Notes', 'Source', 'Campaign', 'Submissions', 'Registered'];
       const lines = [headers.join(',')];
       all.forEach((l, i) => {
         lines.push([
           i + 1, l.name || '', l.phone, l.caStatus || '', l.route || '', l.lastExam || '',
-          l.studentType || '', l.attempt || '', l.slotStatus || '', l.slotTime || '', l.notes || '',
+          l.studentType || '', l.attempt || '',
+          l.counsellingDate ? fmtDate(l.counsellingDate) : '', l.slotWindow || '',
+          l.slotStatus || '', l.slotTime || '', l.notes || '',
           l.source || '', l.campaign || '', l.submissionCount ?? 1,
           l.createdAt ? new Date(l.createdAt).toLocaleString('en-IN') : '',
         ].map(csvEscape).join(','));
@@ -261,6 +277,12 @@ export default function CounsellingPage() {
                 ))}
               </div>
               <div style={{ marginTop: 8, fontSize: 12, color: '#64748b' }}>
+                🗓 <strong style={{ fontWeight: 700, color: '#0f172a' }}>{fmtDate(l.counsellingDate)}</strong>
+                <button onClick={() => editSlotDate(l)} style={{ ...btn('transparent', '#2563eb'), padding: '0 4px', fontSize: 12 }}>✎</button>
+                {' · '}<strong style={{ fontWeight: 600 }}>{l.slotWindow || '—'}</strong>
+                <button onClick={() => editSlotWindow(l)} style={{ ...btn('transparent', '#2563eb'), padding: '0 4px', fontSize: 12 }}>✎</button>
+              </div>
+              <div style={{ marginTop: 4, fontSize: 12, color: '#64748b' }}>
                 Last exam: <strong style={{ fontWeight: 600 }}>{l.lastExam || '—'}</strong>
                 {' · '}Slot: <strong style={{ fontWeight: 600 }}>{l.slotTime || '—'}</strong>
                 <button onClick={() => editSlotTime(l)} style={{ ...btn('transparent', '#2563eb'), padding: '0 4px', fontSize: 12 }}>✎</button>
@@ -280,17 +302,17 @@ export default function CounsellingPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
-                  {['#','Name','Phone','CA Level','Route','Last Exam','Student Type','Attempt','Slot Status','Slot Time','Notes','Subs','Registered'].map(h => (
+                  {['#','Name','Phone','CA Level','Route','Last Exam','Student Type','Attempt','Slot Date','Window','Slot Status','Slot Time','Notes','Subs','Registered'].map(h => (
                     <th key={h} style={th}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={13} style={{ ...td, textAlign: 'center', padding: 56, color: '#94a3b8' }}>Loading…</td></tr>
+                  <tr><td colSpan={15} style={{ ...td, textAlign: 'center', padding: 56, color: '#94a3b8' }}>Loading…</td></tr>
                 )}
                 {!loading && rows.length === 0 && (
-                  <tr><td colSpan={13} style={{ ...td, textAlign: 'center', padding: 56, color: '#94a3b8' }}>No counselling bookings yet.</td></tr>
+                  <tr><td colSpan={15} style={{ ...td, textAlign: 'center', padding: 56, color: '#94a3b8' }}>No counselling bookings yet.</td></tr>
                 )}
                 {!loading && rows.map((l, i) => (
                   <tr
@@ -317,6 +339,14 @@ export default function CounsellingPage() {
                     <td style={{ ...td, color: '#475569', whiteSpace: 'nowrap' }}>{l.lastExam || '—'}</td>
                     <td style={{ ...td, color: '#475569', whiteSpace: 'nowrap' }}>{l.studentType || '—'}</td>
                     <td style={{ ...td, color: '#475569', whiteSpace: 'nowrap' }}>{l.attempt || '—'}</td>
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                      <span style={{ color: '#0f172a', fontWeight: 600 }}>{fmtDate(l.counsellingDate)}</span>
+                      <button onClick={() => editSlotDate(l)} title="Edit counselling date" style={{ ...btn('transparent', '#2563eb'), padding: '0 6px', fontSize: 12 }}>✎</button>
+                    </td>
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                      <span style={{ color: '#475569' }}>{l.slotWindow || '—'}</span>
+                      <button onClick={() => editSlotWindow(l)} title="Edit slot window" style={{ ...btn('transparent', '#2563eb'), padding: '0 6px', fontSize: 12 }}>✎</button>
+                    </td>
                     <td style={td}><StatusSelect l={l} /></td>
                     <td style={{ ...td, whiteSpace: 'nowrap' }}>
                       <span style={{ color: '#475569' }}>{l.slotTime || '—'}</span>
