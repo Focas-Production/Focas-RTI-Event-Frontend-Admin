@@ -4,6 +4,7 @@ import VerifyPage   from './pages/VerifyPage';
 import RegisterPage from './pages/RegisterPage';
 import LeadsPage    from './pages/LeadsPage';
 import CouponLeadsPage from './pages/CouponLeadsPage';
+import CounsellingPage from './pages/CounsellingPage';
 
 const GREEN = '#1D9E75';
 const DARK  = '#0f172a';
@@ -12,6 +13,7 @@ const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: '▦'  },
   { id: 'leads',     label: 'Leads',     icon: '☎'  },
   { id: 'coupons',   label: 'Coupons',   icon: '🎟'  },
+  { id: 'counselling', label: 'Counselling', icon: '🗓' },
   { id: 'verify',    label: 'Verify',    icon: '✓'  },
   { id: 'register',  label: 'Register',  icon: '+'  },
 ];
@@ -29,6 +31,7 @@ export default function App() {
   const Page = tab === 'dashboard' ? Dashboard
              : tab === 'leads'     ? LeadsPage
              : tab === 'coupons'   ? CouponLeadsPage
+             : tab === 'counselling' ? CounsellingPage
              : tab === 'verify'    ? VerifyPage
              : RegisterPage;
 
