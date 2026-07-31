@@ -3,7 +3,29 @@ import { api } from '../lib/api.js';
 
 const GREEN = '#1D9E75';
 
-const INIT = { name: '', phone: '', email: '', appliedForSep: '', appliedForRTI: '', groupSelection: [] };
+const INIT = { name: '', phone: '', email: '', appliedForSep: '', appliedForRTI: '', groupSelection: [], rtiUrls: {} };
+
+// Subject keys must match the backend Attendee schema (group1RtiUrl / group2RtiUrl).
+const RTI_SUBJECTS = {
+  'Group 1': {
+    payloadKey: 'group1RtiUrl',
+    subjects: [
+      ['advancedAccounting',          'Advanced Accounting'],
+      ['corporateLaw',                'Corporate Law'],
+      ['incomeTaxLaw',                'Income Tax Law'],
+      ['gst',                         'GST'],
+    ],
+  },
+  'Group 2': {
+    payloadKey: 'group2RtiUrl',
+    subjects: [
+      ['costandManagementAccounting', 'Cost & Management Accounting'],
+      ['auditingEthics',              'Auditing & Ethics'],
+      ['fm',                          'Financial Management'],
+      ['sm',                          'Strategic Management'],
+    ],
+  },
+};
 
 export default function RegisterPage() {
   const [form,    setForm]    = useState(INIT);
@@ -31,6 +53,18 @@ export default function RegisterPage() {
     if (!form.appliedForRTI)           return setError('Please answer the RTI question.');
     if (!form.groupSelection.length)   return setError('Please select at least one group.');
 
+    // Optional RTI links — validate any filled-in URL and group them by payload key.
+    const rtiPayload = {};
+    for (const g of form.groupSelection) {
+      const { payloadKey, subjects } = RTI_SUBJECTS[g];
+      for (const [key, title] of subjects) {
+        const url = (form.rtiUrls[key] || '').trim();
+        if (!url) continue;
+        if (!/^https?:\/\/\S+$/i.test(url)) return setError(`Invalid RTI link for ${title} — must start with http:// or https://`);
+        (rtiPayload[payloadKey] ??= {})[key] = url;
+      }
+    }
+
     const payload = {
       name:           form.name.trim(),
       phone:          `+91${form.phone}`,
@@ -38,6 +72,7 @@ export default function RegisterPage() {
       appliedForSep:  form.appliedForSep,
       appliedForRTI:  form.appliedForRTI,
       groupSelection: form.groupSelection.length === 2 ? 'Both Group' : form.groupSelection[0],
+      ...rtiPayload,
     };
 
     setStatus('loading');
@@ -103,6 +138,7 @@ export default function RegisterPage() {
                 { v: `₹${((created.amount || 0) / 100).toLocaleString('en-IN')}`, bg: '#f1f5f9', color: '#374151' },
                 { v: `Sep: ${created.appliedForSep}`, bg: '#f0fdf4', color: '#166534' },
                 { v: `RTI: ${created.appliedForRTI}`, bg: '#f0fdf4', color: '#166534' },
+                ...(created.isrtiUrl ? [{ v: '🔗 RTI links added', bg: '#eff6ff', color: '#1d4ed8' }] : []),
               ].map(({ v, bg, color }) => (
                 <span key={v} style={{ background: bg, color, padding: '4px 12px', borderRadius: 99, fontSize: 12, fontWeight: 700 }}>{v}</span>
               ))}
@@ -222,6 +258,35 @@ export default function RegisterPage() {
               </div>
             )}
           </div>
+
+          {/* RTI links (optional) — one URL per subject of the selected group(s) */}
+          {form.groupSelection.length > 0 && (
+            <div style={field}>
+              <label style={label}>RTI Links <span style={{ fontWeight: 500, color: '#94a3b8' }}>(optional)</span></label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {[...form.groupSelection].sort().map(g => (
+                  <div key={g} style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: GREEN, marginBottom: 8 }}>{g}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {RTI_SUBJECTS[g].subjects.map(([key, title]) => (
+                        <div key={key}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>{title}</div>
+                          <input
+                            style={{ ...input, padding: '9px 12px', fontSize: 13 }}
+                            type="url" placeholder="https://…"
+                            value={form.rtiUrls[key] || ''}
+                            onChange={e => setForm(f => ({ ...f, rtiUrls: { ...f.rtiUrls, [key]: e.target.value } }))}
+                            onFocus={e => e.target.style.borderColor = GREEN}
+                            onBlur={e  => e.target.style.borderColor = '#e2e8f0'}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Error */}
           {error && (
