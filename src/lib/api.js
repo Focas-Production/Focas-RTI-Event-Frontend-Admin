@@ -24,6 +24,14 @@ export const api = {
       headers: BASE_HEADERS,
       body:    JSON.stringify(body),
     }),
+
+  // multipart/form-data — browser sets the Content-Type (with boundary) itself.
+  upload: (path, formData) =>
+    fetch(`${BACKEND}${path}`, {
+      method:  'POST',
+      headers: { 'ngrok-skip-browser-warning': 'true' },
+      body:    formData,
+    }),
 };
 
 export { BACKEND };

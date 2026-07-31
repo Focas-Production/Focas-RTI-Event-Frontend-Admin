@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api.js';
 import CopyButton from '../components/CopyButton.jsx';
 
@@ -51,13 +51,13 @@ const SEL = (props) => (
 
 /* ── RTI link grouping (matches Attendee schema) ───────────────── */
 const RTI_GROUPS = [
-  { key: 'group1RtiUrl', label: 'Group 1', subjects: [
+  { key: 'group1RtiUrl', reviewKey: 'group1ReviewUrl', label: 'Group 1', subjects: [
     ['advancedAccounting', 'Advanced Accounting'],
     ['corporateLaw',       'Corporate Law'],
     ['incomeTaxLaw',       'Income Tax Law'],
     ['gst',                'GST'],
   ] },
-  { key: 'group2RtiUrl', label: 'Group 2', subjects: [
+  { key: 'group2RtiUrl', reviewKey: 'group2ReviewUrl', label: 'Group 2', subjects: [
     ['costandManagementAccounting', 'Cost & Management Accounting'],
     ['auditingEthics',              'Auditing & Ethics'],
     ['fm',                          'FM'],
@@ -70,14 +70,20 @@ const normalizeHref = (u) => {
   catch { return '//' + u; }
 };
 
-// Flatten an attendee's RTI links into [{ group, subject, url }].
+// Flatten an attendee's RTI links into [{ group, subject, url, reviewUrl }].
 const collectRtiLinks = (a) => {
   const out = [];
   for (const g of RTI_GROUPS) {
     const obj = a[g.key] || {};
+    const reviewObj = a[g.reviewKey] || {};
     for (const [field, label] of g.subjects) {
       const arr = Array.isArray(obj[field]) ? obj[field] : [];
-      arr.filter(Boolean).forEach(url => out.push({ group: g.label, subject: label, url }));
+      const reviewUrl = typeof reviewObj[field] === 'string' ? reviewObj[field] : '';
+      arr.filter(Boolean).forEach(url => out.push({ group: g.label, subject: label, url, reviewUrl }));
+      // Review added but no RTI link yet — still surface it.
+      if (!arr.filter(Boolean).length && reviewUrl) {
+        out.push({ group: g.label, subject: label, url: '', reviewUrl });
+      }
     }
   }
   return out;
@@ -155,7 +161,9 @@ export default function Dashboard() {
       const lines = [headers.join(',')];
 
       all.forEach((a, i) => {
-        const links = collectRtiLinks(a).map(l => `${l.group}/${l.subject}: ${l.url}`).join(' | ');
+        const links = collectRtiLinks(a)
+          .map(l => `${l.group}/${l.subject}: ${l.url}${l.reviewUrl ? ` (Review: ${l.reviewUrl})` : ''}`)
+          .join(' | ');
         lines.push([
           i + 1,
           a.name,
@@ -379,15 +387,26 @@ export default function Dashboard() {
                   </td>
                   <td style={td}>
                     {(() => {
-                      const links = collectRtiLinks(a);
-                      return links.length
-                        ? <button
-                            onClick={() => setLinksModal({ name: a.name, links })}
+                      const links   = collectRtiLinks(a);
+                      const nLinks  = links.filter(l => l.url).length;
+                      const nReview = new Set(links.filter(l => l.reviewUrl).map(l => `${l.group}/${l.subject}`)).size;
+                      return (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <button
+                            onClick={() => setLinksModal(a)}
                             style={{ background: '#eef2ff', color: '#4338ca', border: '1.5px solid #c7d2fe', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
                           >
-                            🔗 RTI Links ({links.length})
+                            🔗 RTI Links ({nLinks})
                           </button>
-                        : <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>;
+                          <button
+                            onClick={() => setLinksModal(a)}
+                            title="Answer-sheet reviews"
+                            style={{ background: nReview ? '#ecfdf5' : '#f8fafc', color: nReview ? '#047857' : '#94a3b8', border: `1.5px solid ${nReview ? '#a7f3d0' : '#e2e8f0'}`, borderRadius: 7, padding: '6px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >
+                            📄 {nReview}
+                          </button>
+                        </span>
+                      );
                     })()}
                   </td>
                   <td style={td}>
@@ -445,17 +464,103 @@ export default function Dashboard() {
 
       {/* ── RTI links popup ─────────────────────────────────────────── */}
       {linksModal && (
-        <RtiLinksModal data={linksModal} onClose={() => setLinksModal(null)} />
+        <RtiLinksModal
+          attendee={linksModal}
+          onClose={() => setLinksModal(null)}
+          onSaved={(updated) => {
+            setRows(rs => rs.map(r => (r._id === updated._id ? updated : r)));
+            setLinksModal(updated);
+          }}
+        />
       )}
     </div>
   );
 }
 
-/* ── RTI links popup ─────────────────────────────────────────────── */
-function RtiLinksModal({ data, onClose }) {
-  // Group the flat link list by group label for display.
-  const byGroup = {};
-  data.links.forEach(l => { (byGroup[l.group] ||= []).push(l); });
+/* ── RTI links popup (view links + manage review HTML pages) ─────── */
+const linkBtn   = { background: '#eef2ff', color: '#4338ca', border: '1.5px solid #c7d2fe', borderRadius: 7, padding: '5px 11px', fontSize: 12, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' };
+const reviewBtn = { background: '#ecfdf5', color: '#047857', border: '1.5px solid #a7f3d0', borderRadius: 7, padding: '5px 11px', fontSize: 12, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' };
+const ghostBtn  = { background: '#f8fafc', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: 7, padding: '5px 9px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' };
+
+function RtiLinksModal({ attendee, onClose, onSaved }) {
+  const [editing, setEditing] = useState(null); // { reviewKey, field }
+  const [draft,   setDraft]   = useState('');
+  const [file,    setFile]    = useState(null);
+  const [busy,    setBusy]    = useState(false);
+  const [error,   setError]   = useState('');
+  const [toast,   setToast]   = useState('');
+  const toastTimer = useRef(null);
+
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 3500);
+  };
+
+  const labelFor = (reviewKey, field) => {
+    const g = RTI_GROUPS.find(gr => gr.reviewKey === reviewKey);
+    const s = g?.subjects.find(([f]) => f === field);
+    return s ? s[1] : field;
+  };
+
+  const sel = attendee.groupSelection;
+  const groupHasData = (g) => {
+    const urls    = attendee[g.key] || {};
+    const reviews = attendee[g.reviewKey] || {};
+    return g.subjects.some(([f]) =>
+      (Array.isArray(urls[f]) && urls[f].filter(Boolean).length) || reviews[f]);
+  };
+  const groups = RTI_GROUPS.filter(g =>
+    sel === 'Both Group' ||
+    (g.key === 'group1RtiUrl' ? sel === 'Group 1' : sel === 'Group 2') ||
+    groupHasData(g)
+  );
+
+  const startEdit = (reviewKey, field, current) => {
+    setEditing({ reviewKey, field });
+    setDraft(current || '');
+    setFile(null);
+    setError('');
+  };
+
+  const finish = (d, msg) => {
+    onSaved(d.attendee);
+    setEditing(null); setDraft(''); setFile(null);
+    if (msg) showToast(msg);
+  };
+
+  const saveUrl = async (url) => {
+    const label = labelFor(editing.reviewKey, editing.field);
+    setBusy(true); setError('');
+    try {
+      const r = await api.patch(`/api/attendees/${attendee._id}/review-url`, {
+        group: editing.reviewKey, subject: editing.field, url,
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.message || d.error || 'Save failed');
+      finish(d, url ? `✓ Review link saved for ${label}` : `✓ Review removed for ${label}`);
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const uploadHtml = async () => {
+    if (!file) { setError('Choose an HTML file first'); return; }
+    const label = labelFor(editing.reviewKey, editing.field);
+    setBusy(true); setError('');
+    try {
+      const fd = new FormData();
+      fd.append('group',   editing.reviewKey);
+      fd.append('subject', editing.field);
+      fd.append('file',    file);
+      const r = await api.upload(`/api/attendees/${attendee._id}/review-upload`, fd);
+      const d = await r.json();
+      if (!d.success) throw new Error(d.message || d.error || 'Upload failed');
+      finish(d, `✓ "${file.name}" uploaded for ${label}`);
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  };
 
   return (
     <div
@@ -464,33 +569,96 @@ function RtiLinksModal({ data, onClose }) {
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ background: '#fff', borderRadius: 16, width: 500, maxWidth: '92vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
+        style={{ background: '#fff', borderRadius: 16, width: 560, maxWidth: '92vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 22px', borderBottom: '1.5px solid #e2e8f0' }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a' }}>RTI Links</div>
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>{data.name}</div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a' }}>RTI Links & Reviews</div>
+            <div style={{ fontSize: 12, color: '#94a3b8' }}>{attendee.name}</div>
           </div>
           <button onClick={onClose} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 17, fontWeight: 700, color: '#64748b', cursor: 'pointer' }}>×</button>
         </div>
 
+        {toast && (
+          <div style={{ margin: '12px 22px 0', padding: '10px 14px', background: '#ecfdf5', border: '1.5px solid #a7f3d0', color: '#047857', borderRadius: 10, fontSize: 13, fontWeight: 700 }}>
+            {toast}
+          </div>
+        )}
+
         <div style={{ padding: '12px 22px 18px', overflowY: 'auto' }}>
-          {Object.entries(byGroup).map(([group, links]) => (
-            <div key={group} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: '#1D9E75', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '8px 0 4px' }}>{group}</div>
-              {links.map((l, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '9px 0', borderBottom: '1px solid #f1f5f9' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>{l.subject}</span>
-                  <a
-                    href={normalizeHref(l.url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ background: '#eef2ff', color: '#4338ca', border: '1.5px solid #c7d2fe', borderRadius: 7, padding: '5px 11px', fontSize: 12, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
-                  >
-                    🔗 Open
-                  </a>
-                </div>
-              ))}
+          {groups.map(g => (
+            <div key={g.key} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#1D9E75', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '8px 0 4px' }}>{g.label}</div>
+              {g.subjects.map(([field, label]) => {
+                const urls      = ((attendee[g.key] || {})[field] || []).filter(Boolean);
+                const reviewUrl = (attendee[g.reviewKey] || {})[field] || '';
+                const isEditing = editing && editing.reviewKey === g.reviewKey && editing.field === field;
+                return (
+                  <div key={field} style={{ padding: '9px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>{label}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        {urls.map((u, i) => (
+                          <a key={i} href={normalizeHref(u)} target="_blank" rel="noopener noreferrer" style={linkBtn}>
+                            🔗 Open{urls.length > 1 ? ` ${i + 1}` : ''}
+                          </a>
+                        ))}
+                        {reviewUrl && (
+                          <a href={normalizeHref(reviewUrl)} target="_blank" rel="noopener noreferrer" style={reviewBtn}>
+                            📄 Review
+                          </a>
+                        )}
+                        <button
+                          onClick={() => (isEditing ? setEditing(null) : startEdit(g.reviewKey, field, reviewUrl))}
+                          title={reviewUrl ? 'Edit review' : 'Add review'}
+                          style={ghostBtn}
+                        >
+                          {isEditing ? '✕' : reviewUrl ? '✏️' : '＋ Review'}
+                        </button>
+                      </span>
+                    </div>
+
+                    {isEditing && (
+                      <div style={{ marginTop: 8, padding: 10, background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <input
+                            type="file"
+                            accept=".html,.htm,text/html"
+                            onChange={e => setFile(e.target.files?.[0] || null)}
+                            style={{ fontSize: 12, color: '#475569', flex: 1, minWidth: 160 }}
+                          />
+                          <button onClick={uploadHtml} disabled={busy} style={{ ...reviewBtn, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1, border: 'none', background: '#047857', color: '#fff' }}>
+                            {busy ? 'Uploading…' : '⬆ Upload HTML'}
+                          </button>
+                        </div>
+                        {file && (
+                          <div style={{ fontSize: 12, color: '#047857', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                            ✓ Selected: {file.name} ({(file.size / 1024).toFixed(0)} KB)
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="text"
+                            placeholder="…or paste the review URL"
+                            value={draft}
+                            onChange={e => setDraft(e.target.value)}
+                            style={{ flex: 1, border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 12, padding: '7px 9px', outline: 'none', color: '#374151' }}
+                          />
+                          <button onClick={() => saveUrl(draft.trim())} disabled={busy || !draft.trim()} style={{ ...ghostBtn, cursor: busy ? 'wait' : 'pointer' }}>
+                            Save
+                          </button>
+                          {reviewUrl && (
+                            <button onClick={() => saveUrl('')} disabled={busy} style={{ ...ghostBtn, color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }}>
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                        {error && <div style={{ fontSize: 12, color: '#dc2626', fontWeight: 600 }}>{error}</div>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
