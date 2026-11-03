@@ -89,7 +89,28 @@ const collectRtiLinks = (a) => {
   return out;
 };
 
-const EMPTY = { q: '', paymentStatus: '', attended: '', groupSelection: '', appliedForSep: '', appliedForRTI: '', isrtiUrl: '' };
+const EMPTY = { q: '', paymentStatus: '', attended: '', groupSelection: '', appliedForSep: '', appliedForRTI: '', isrtiUrl: '', batch: '', from: '', to: '' };
+
+// Batch + registration-date scope — shared by the table, stats and CSV export.
+const setScopeParams = (q, f) => {
+  if (f.batch) q.set('batch', f.batch);
+  if (f.from)  q.set('from',  f.from);
+  if (f.to)    q.set('to',    f.to);
+  return q;
+};
+
+// Every table filter (scope + the rest).
+const setFilterParams = (q, f) => {
+  setScopeParams(q, f);
+  if (f.q)               q.set('q', f.q);
+  if (f.paymentStatus)   q.set('paymentStatus', f.paymentStatus);
+  if (f.attended !== '') q.set('attended', f.attended);
+  if (f.groupSelection)  q.set('groupSelection', f.groupSelection);
+  if (f.appliedForSep)   q.set('appliedForSep', f.appliedForSep);
+  if (f.appliedForRTI)   q.set('appliedForRTI', f.appliedForRTI);
+  if (f.isrtiUrl !== '') q.set('isrtiUrl', f.isrtiUrl);
+  return q;
+};
 
 export default function Dashboard() {
   const [stats,     setStats]     = useState({});
@@ -106,23 +127,17 @@ export default function Dashboard() {
   const [limit,     setLimit]     = useState(20);      // rows per page
 
   /* ── data fetchers ─────────────────────────────────────────────── */
-  const fetchStats = async () => {
+  const fetchStats = async (f = filters) => {
     try {
-      const d = await api.get('/api/attendees/stats').then(r => r.json());
+      const q = setScopeParams(new URLSearchParams(), f);
+      const d = await api.get(`/api/attendees/stats?${q}`).then(r => r.json());
       if (d.success) setStats(d.stats);
     } catch (_) {}
   };
 
   const fetchRows = async (p = 1, f = filters, lim = limit) => {
     setLoading(true); setError('');
-    const q = new URLSearchParams({ page: p, limit: lim });
-    if (f.q)               q.set('q', f.q);
-    if (f.paymentStatus)   q.set('paymentStatus', f.paymentStatus);
-    if (f.attended !== '') q.set('attended', f.attended);
-    if (f.groupSelection)  q.set('groupSelection', f.groupSelection);
-    if (f.appliedForSep)   q.set('appliedForSep', f.appliedForSep);
-    if (f.appliedForRTI)   q.set('appliedForRTI', f.appliedForRTI);
-    if (f.isrtiUrl !== '')  q.set('isrtiUrl', f.isrtiUrl);
+    const q = setFilterParams(new URLSearchParams({ page: p, limit: lim }), f);
     try {
       const d = await api.get(`/api/attendees/search?${q}`).then(r => r.json());
       if (d.success) { setRows(d.attendees); setTotal(d.total); setPages(d.pages || 1); setPage(p); }
@@ -131,7 +146,7 @@ export default function Dashboard() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchStats(); fetchRows(1, EMPTY); }, []);
+  useEffect(() => { fetchStats(EMPTY); fetchRows(1, EMPTY); }, []);
 
   /* ── export all registrations to CSV (frontend-only) ───────────── */
   const csvEscape = (v) => {
@@ -142,11 +157,11 @@ export default function Dashboard() {
   const exportCsv = async () => {
     setExporting(true);
     try {
-      // Pull every registration by paging through the search endpoint (no filters).
+      // Pull every registration matching the current filters by paging through the search endpoint.
       const all = [];
       let p = 1, totalPages = 1;
       do {
-        const q = new URLSearchParams({ page: p, limit: 100 });
+        const q = setFilterParams(new URLSearchParams({ page: p, limit: 100 }), filters);
         const d = await api.get(`/api/attendees/search?${q}`).then(r => r.json());
         if (!d.success) throw new Error('Backend returned an error');
         all.push(...(d.attendees || []));
@@ -154,7 +169,7 @@ export default function Dashboard() {
         p++;
       } while (p <= totalPages);
 
-      const headers = ['#', 'Name', 'Phone', 'Email', 'Applied Sep', 'Applied RTI', 'Group',
+      const headers = ['#', 'Batch', 'Name', 'Phone', 'Email', 'Applied Sep', 'Applied RTI', 'Group',
                        'Amount Paid (₹)', 'MRP (₹)', 'Discount (₹)', 'Coupon',
                        'Payment', 'Source', 'Campaign', 'Attended', 'Scan Time', 'RTI Links',
                        'Order ID', 'Payment ID', 'Registered At'];
@@ -166,6 +181,7 @@ export default function Dashboard() {
           .join(' | ');
         lines.push([
           i + 1,
+          a.batch || 'Sep 2026',
           a.name,
           a.phone,
           a.email,
@@ -205,8 +221,8 @@ export default function Dashboard() {
     }
   };
 
-  const apply = () => { const f = { ...filters, q: inputQ }; setFilters(f); fetchRows(1, f); fetchStats(); };
-  const clear = () => { setInputQ(''); setFilters(EMPTY); fetchRows(1, EMPTY); fetchStats(); };
+  const apply = () => { const f = { ...filters, q: inputQ }; setFilters(f); fetchRows(1, f); fetchStats(f); };
+  const clear = () => { setInputQ(''); setFilters(EMPTY); fetchRows(1, EMPTY); fetchStats(EMPTY); };
   const setF  = (k, v) => setFilters(f => ({ ...f, [k]: v }));
 
   /* ── mark attended ─────────────────────────────────────────────── */
@@ -275,6 +291,23 @@ export default function Dashboard() {
             onChange={e => setInputQ(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && apply()}
           />
+          <SEL value={filters.batch} onChange={e => setF('batch', e.target.value)}>
+            <option value="">All Batches</option>
+            <option value="Jan 2027">Jan 2027</option>
+            <option value="Sep 2026">Sep 2026</option>
+          </SEL>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#64748b' }}>
+            From
+            <input type="date" value={filters.from} max={filters.to || undefined}
+              onChange={e => setF('from', e.target.value)}
+              style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#374151', outline: 'none' }} />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#64748b' }}>
+            To
+            <input type="date" value={filters.to} min={filters.from || undefined}
+              onChange={e => setF('to', e.target.value)}
+              style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#374151', outline: 'none' }} />
+          </label>
           <SEL value={filters.paymentStatus} onChange={e => setF('paymentStatus', e.target.value)}>
             <option value="">All Payments</option>
             <option value="paid">Paid</option>
